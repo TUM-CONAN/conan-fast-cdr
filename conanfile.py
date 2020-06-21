@@ -1,5 +1,6 @@
 from conans import ConanFile, CMake, tools
-
+import os
+import shutil
 
 class FastCDRConan(ConanFile):
     name = "Fast-CDR"
@@ -34,6 +35,10 @@ conan_basic_setup()''')
             var_value = "ON" if value_str == 'True' else "OFF" if value_str == 'False' else value_str
             cmake.definitions[var_name] = var_value
 
+        if self.options.shared:
+            cmake.definitions["EPROSIMA_ALL_DYN_LINK"] = ""
+            cmake.definitions["fastcdr_EXPORTS"] = ""
+
         for option, value in self.options.items():
             add_cmake_option(option, value)
 
@@ -50,4 +55,6 @@ conan_basic_setup()''')
 
     def package_info(self):
         self.cpp_info.libs = tools.collect_libs(self)
+        if self.options.shared:
+            self.cpp_info.defines = ["EPROSIMA_ALL_DYN_LINK"]
 
