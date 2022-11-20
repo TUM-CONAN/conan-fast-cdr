@@ -4,9 +4,9 @@ import shutil
 
 class FastCDRConan(ConanFile):
     name = "Fast-CDR"
-    version = "1.0.14"
+    version = "1.0.25"
     license = "Apache License 2.0"
-    author = "Frieder Pankratz"
+    author = "Frieder Pankratz / Ulrich Eck"
     url = "https://github.com/TUM-CONAN/conan-fast-cdr.git"
     description = "Conan wrapper for Fast-CDR"
     settings = "os", "compiler", "build_type", "arch"
@@ -16,7 +16,7 @@ class FastCDRConan(ConanFile):
 
     def source(self):        
         git = tools.Git()        
-        git.clone("https://github.com/eProsima/Fast-CDR.git", "release/%s" % self.version)
+        git.clone("https://github.com/eProsima/Fast-CDR.git", "v%s" % self.version)
         # This small hack might be useful to guarantee proper /MT /MD linkage
         # in MSVC if the packaged project doesn't have variables to set it
         # properly
