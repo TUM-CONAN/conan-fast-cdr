@@ -4,7 +4,7 @@ import shutil
 
 class FastCDRConan(ConanFile):
     name = "Fast-CDR"
-    version = "1.0.25"
+    version = "1.0.26"
     license = "Apache License 2.0"
     author = "Frieder Pankratz / Ulrich Eck"
     url = "https://github.com/TUM-CONAN/conan-fast-cdr.git"
