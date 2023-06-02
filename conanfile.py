@@ -1,60 +1,109 @@
-from conans import ConanFile, CMake, tools
+from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
+from conan.tools.build import check_min_cppstd
+from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
+from conan.tools.files import collect_libs, copy, get, rm, rmdir, save
+from conan.tools.microsoft import is_msvc, is_msvc_static_runtime
 import os
-import shutil
+import textwrap
+
+required_conan_version = ">=1.54.0"
+
 
 class FastCDRConan(ConanFile):
-    name = "Fast-CDR"
-    version = "1.0.26"
-    license = "Apache License 2.0"
-    author = "Frieder Pankratz / Ulrich Eck"
-    url = "https://github.com/TUM-CONAN/conan-fast-cdr.git"
-    description = "Conan wrapper for Fast-CDR"
-    settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False]}
-    default_options = {"shared": True}
-    generators = "cmake"
+    name = "fast-cdr"
+    version = "1.0.27"
+    
+    license = "Apache-2.0"
+    homepage = "https://github.com/eProsima/Fast-CDR"
+    url = "https://github.com/conan-io/conan-center-index"
+    description = "eProsima FastCDR library for serialization"
+    topics = ("dds", "middleware", "serialization")
 
-    def source(self):        
-        git = tools.Git()        
-        git.clone("https://github.com/eProsima/Fast-CDR.git", "v%s" % self.version)
-        # This small hack might be useful to guarantee proper /MT /MD linkage
-        # in MSVC if the packaged project doesn't have variables to set it
-        # properly
-        tools.replace_in_file("CMakeLists.txt", "project(fastcdr VERSION \"${LIB_VERSION_STR}\" LANGUAGES C CXX)",
-                              '''project(fastcdr VERSION "${LIB_VERSION_STR}" LANGUAGES C CXX)
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()''')
+    package_type = "library"
+    settings = "os", "arch", "compiler", "build_type"
+    options = {
+        "shared": [True, False],
+        "fPIC": [True, False],
+    }
+    default_options = {
+        "shared": False,
+        "fPIC": True,
+    }
 
-    def _configure_cmake(self):
-        cmake = CMake(self)
-        cmake.verbose = True
+    def config_options(self):
+        if self.settings.os == "Windows":
+            del self.options.fPIC
 
-        def add_cmake_option(option, value):
-            var_name = "{}".format(option).upper()
-            value_str = "{}".format(value)
-            var_value = "ON" if value_str == 'True' else "OFF" if value_str == 'False' else value_str
-            cmake.definitions[var_name] = var_value
-
+    def configure(self):
         if self.options.shared:
-            cmake.definitions["EPROSIMA_ALL_DYN_LINK"] = ""
-            cmake.definitions["fastcdr_EXPORTS"] = ""
+            self.options.rm_safe("fPIC")
 
-        for option, value in self.options.items():
-            add_cmake_option(option, value)
+    def layout(self):
+        cmake_layout(self, src_folder="src")
 
-        cmake.configure()
-        return cmake
+    def validate(self):
+        if self.settings.compiler.get_safe("cppstd"):
+            check_min_cppstd(self, 11)
+        if self.options.shared and is_msvc(self) and is_msvc_static_runtime(self):
+            # This combination leads to an fast-cdr error when linking
+            # linking dynamic '*.dll' and static MT runtime
+            # see https://github.com/eProsima/Fast-CDR/blob/v1.0.21/include/fastcdr/eProsima_auto_link.h#L37
+            # (2021-05-31)
+            raise ConanInvalidConfiguration("Mixing a dll eprosima library with a static runtime is a bad idea")
+
+    def source(self):
+        get(self, **self.conan_data["sources"][self.version], strip_root=True)
+
+    def generate(self):
+        tc = CMakeToolchain(self)
+        tc.variables["BUILD_STATIC"] = not self.options.shared
+        tc.generate()
 
     def build(self):
-        cmake = self._configure_cmake()
+        cmake = CMake(self)
+        cmake.configure()
         cmake.build()
 
     def package(self):
-        cmake = self._configure_cmake()
+        copy(self, "LICENSE", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
+        cmake = CMake(self)
         cmake.install()
+        rmdir(self, os.path.join(self.package_folder, "lib", "cmake"))
+        rmdir(self, os.path.join(self.package_folder, "share"))
+        rm(self, "*.pdb", os.path.join(self.package_folder, "lib"))
+        rm(self, "*.pdb", os.path.join(self.package_folder, "bin"))
+
+        # TODO: to remove in conan v2 once cmake_find_package_* generators removed
+        self._create_cmake_module_alias_targets(
+            os.path.join(self.package_folder, self._module_file_rel_path),
+            {"fastcdr": "fastcdr::fastcdr"}
+        )
+
+    def _create_cmake_module_alias_targets(self, module_file, targets):
+        content = ""
+        for alias, aliased in targets.items():
+            content += textwrap.dedent(f"""\
+                if(TARGET {aliased} AND NOT TARGET {alias})
+                    add_library({alias} INTERFACE IMPORTED)
+                    set_property(TARGET {alias} PROPERTY INTERFACE_LINK_LIBRARIES {aliased})
+                endif()
+            """)
+        save(self, module_file, content)
+
+    @property
+    def _module_file_rel_path(self):
+        return os.path.join("lib", "cmake", f"conan-official-{self.name}-targets.cmake")
 
     def package_info(self):
-        self.cpp_info.libs = tools.collect_libs(self)
-        if self.options.shared:
-            self.cpp_info.defines = ["EPROSIMA_ALL_DYN_LINK"]
+        self.cpp_info.set_property("cmake_file_name", "fastcdr")
+        self.cpp_info.set_property("cmake_target_name", "fastcdr")
+        self.cpp_info.libs = collect_libs(self)
+        if self.settings.os == "Windows" and self.options.shared:
+            self.cpp_info.defines.append("FASTCDR_DYN_LINK")
 
+        # TODO: to remove in conan v2 once cmake_find_package_* generators removed
+        self.cpp_info.names["cmake_find_package"] = "fastcdr"
+        self.cpp_info.names["cmake_find_package_multi"] = "fastcdr"
+        self.cpp_info.build_modules["cmake_find_package"] = [self._module_file_rel_path]
+        self.cpp_info.build_modules["cmake_find_package_multi"] = [self._module_file_rel_path]
