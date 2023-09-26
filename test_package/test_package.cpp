@@ -61,14 +61,14 @@ int main()
     // Serialization.
     FastBuffer cdrbuffer(buffer, BUFFER_LENGTH);
     Cdr cdr_ser(cdrbuffer);
-    cdr_ser.serializeSequence(char_seq_t, 5);
+    cdr_ser.serialize_sequence(char_seq_t, 5);
 
     // Deserialization.
     Cdr cdr_des(cdrbuffer);
 
     char* char_seq_value = NULL; size_t char_seq_len = 0;
 
-    cdr_des.deserializeSequence(char_seq_value, char_seq_len);
+    cdr_des.deserialize_sequence(char_seq_value, char_seq_len);
 
     return 0;
 }

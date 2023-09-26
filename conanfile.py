@@ -4,6 +4,7 @@ from conan.tools.build import check_min_cppstd
 from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
 from conan.tools.files import collect_libs, copy, get, rm, rmdir, save
 from conan.tools.microsoft import is_msvc, is_msvc_static_runtime
+from conan.tools.scm import Version
 import os
 import textwrap
 
@@ -12,11 +13,10 @@ required_conan_version = ">=1.54.0"
 
 class FastCDRConan(ConanFile):
     name = "fast-cdr"
-    version = "1.0.27"
-    
+    version = "2.0.0"
     license = "Apache-2.0"
     homepage = "https://github.com/eProsima/Fast-CDR"
-    url = "https://github.com/conan-io/conan-center-index"
+    url = "https://github.com/TUM-CONAN/conan-fast-cdr"
     description = "eProsima FastCDR library for serialization"
     topics = ("dds", "middleware", "serialization")
 
@@ -41,6 +41,10 @@ class FastCDRConan(ConanFile):
 
     def layout(self):
         cmake_layout(self, src_folder="src")
+
+    def build_requirements(self):
+        if Version(self.version) >= "1.1.0":
+            self.tool_requires("cmake/[>=3.16.3 <4]")
 
     def validate(self):
         if self.settings.compiler.get_safe("cppstd"):
