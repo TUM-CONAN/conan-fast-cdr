@@ -62,6 +62,9 @@ class FastCDRConan(ConanFile):
     def generate(self):
         tc = CMakeToolchain(self)
         tc.variables["BUILD_STATIC"] = not self.options.shared
+        if self.settings.os == "Windows" or self.settings.os == "WindowsStore":
+            if self.settings.build_type == "Debug":
+                tc.preprocessor_definitions["_DEBUG"] = "1"
         tc.generate()
 
     def build(self):
@@ -103,7 +106,10 @@ class FastCDRConan(ConanFile):
         self.cpp_info.set_property("cmake_file_name", "fastcdr")
         self.cpp_info.set_property("cmake_target_name", "fastcdr")
         self.cpp_info.libs = collect_libs(self)
-        if self.settings.os == "Windows" and self.options.shared:
+
+        if not self.options.shared:
+            self.cpp_info.defines.append("FASTCDR_STATIC_LINK")
+        else:
             self.cpp_info.defines.append("FASTCDR_DYN_LINK")
 
         # TODO: to remove in conan v2 once cmake_find_package_* generators removed
